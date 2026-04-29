@@ -16,18 +16,36 @@ get_ratio() {
     ;;
 
   Darwin)
-    # Get used memory blocks with vm_stat, multiply by page size to get size in bytes, then convert to MiB
-    used_mem=$(vm_stat | grep ' active\|wired ' | sed 's/[^0-9]//g' | paste -sd ' ' - | awk -v pagesize=$(pagesize) '{printf "%d\n", ($1+$2) * pagesize / 1048576}')
-    # System Profiler performs an activation lock check, which can result in
-    # time outs or a lagged response. (~10 seconds)
-    # total_mem=$(system_profiler SPHardwareDataType | grep "Memory:" | awk '{print $2 $3}')
-    total_mem=$(sysctl -n hw.memsize | awk '{print $0/1024/1024/1024 " GiB"}')
-    if ((used_mem < 1024)); then
-      echo "${used_mem}MiB/$total_mem"
+    pagesize=$(pagesize)
+    total_mem_bytes=$(sysctl -n hw.memsize)
+    total_mem_gib=$(awk -v bytes="$total_mem_bytes" 'BEGIN {printf "%.0f", bytes/1024/1024/1024}')
+
+    free_pages=$(vm_stat | awk '/Pages free/ {gsub("\\.", "", $3); print $3}')
+    speculative_pages=$(vm_stat | awk '/Pages speculative/ {gsub("\\.", "", $3); print $3}')
+    purgeable_pages=$(vm_stat | awk '/Pages purgeable/ {gsub("\\.", "", $3); print $3}')
+
+    free_mem_bytes=$(((free_pages + speculative_pages + purgeable_pages) * pagesize))
+    used_mem_mib=$(((total_mem_bytes - free_mem_bytes) / 1024 / 1024))
+
+    swap_used_mib=$(sysctl vm.swapusage | awk -F'used = |M  free' '{print int($2)}')
+
+    if ((used_mem_mib < 1024)); then
+      formatted="${used_mem_mib}MiB/${total_mem_gib}GiB"
     else
-      memory=$((used_mem / 1024))
-      echo "${memory}GiB/$total_mem"
+      used_mem_gib=$(awk -v mib="$used_mem_mib" 'BEGIN {printf "%.1f", mib/1024}')
+      formatted="${used_mem_gib}GiB/${total_mem_gib}GiB"
     fi
+
+    if ((swap_used_mib > 0)); then
+      if ((swap_used_mib < 1024)); then
+        formatted="$formatted +${swap_used_mib}MiB swap"
+      else
+        swap_used_gib=$(awk -v mib="$swap_used_mib" 'BEGIN {printf "%.1f", mib/1024}')
+        formatted="$formatted +${swap_used_gib}GiB swap"
+      fi
+    fi
+
+    echo "$formatted"
     ;;
 
   FreeBSD)

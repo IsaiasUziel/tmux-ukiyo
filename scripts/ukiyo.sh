@@ -274,6 +274,10 @@ main() {
       IFS=' ' read -r -a colors <<<$(get_tmux_option "@ukiyo-disk-usage-colors" "info bg_pane")
       script="#($current_dir/disk_usage.sh)"
 
+    elif [ $plugin = "disk-free" ]; then
+      IFS=' ' read -r -a colors <<<$(get_tmux_option "@ukiyo-disk-free-colors" "muted bg_pane")
+      script="#($current_dir/disk_free.sh)"
+
     elif [ $plugin = "attached-clients" ]; then
       IFS=' ' read -r -a colors <<<$(get_tmux_option "@ukiyo-attached-clients-colors" "info bg_pane")
       script="#($current_dir/attached_clients.sh)"
